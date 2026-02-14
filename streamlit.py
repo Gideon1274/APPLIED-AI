@@ -1,75 +1,108 @@
 import streamlit as st
+from datetime import datetime
 import pandas as pd
-from datetime import date
+import numpy as np
 
-st.set_page_config(page_title="My Portfolio", page_icon="🚀", layout="wide")
+st.set_page_config(page_title="Autobiography & Portfolio", page_icon="🚀", layout="wide")
 
-with st.sidebar:
-    st.image("https://via.placeholder.com/150")
-    st.title("Contact Me")
-    st.write("📧 email@example.com")
-    st.write("🔗 [LinkedIn](https://linkedin.com)")
-    st.write("💻 [GitHub](https://github.com)")
-    
-    status = st.radio("Current Status", ["Available for Hire", "Busy", "Open to Collab"])
-    if status == "Available for Hire":
-        st.success("I'm ready to work!")
+st.title("Rainric Randy Yu")
+st.subheader("BSIT Graduate | Aspiring Developer | JLPT Learner")
 
-tab1, tab2, tab3 = st.tabs(["📖 Autobiography", "🛠️ Portfolio", "📩 Connect"])
+menu = st.sidebar.radio(
+    "Navigation",
+    ["Home", "About Me", "Skills", "Projects", "Experience", "Contact"]
+)
 
-with tab1:
-    col1, col2 = st.columns([2, 1])
-    
+if menu == "Home":
+    st.header("Welcome")
+    st.write("This is my personal Streamlit autobiography and portfolio application.")
+    st.image("https://via.placeholder.com/800x300.png?text=Portfolio+Banner")
+    st.success("Currently open for opportunities.")
+    st.info(f"Last updated: {datetime.now().strftime('%B %d, %Y')}")
+
+elif menu == "About Me":
+    st.header("About Me")
+    col1, col2 = st.columns(2)
     with col1:
-        st.header("Who Am I?")
-        st.markdown("""
-        I am a passionate **Full-Stack Developer** and **Data Enthusiast** based in the digital world. 
-        I believe in building tools that make people's lives easier and more efficient.
-        """)
-        
-        st.subheader("The Journey")
-        st.info("Started coding in 2018. Transitioned from manual spreadsheets to automated Python scripts.")
-        
+        st.write("I am a BSIT graduate passionate about software development and Japanese language learning.")
+        st.write("I enjoy building web applications, solving problems, and improving my technical skills.")
+        st.metric("Height (cm)", 160)
+        st.metric("Weight (kg)", 65)
     with col2:
-        st.subheader("Core Skills")
-        skills = ["Python", "Streamlit", "SQL", "React", "AWS"]
-        for skill in skills:
-            st.button(skill, disabled=True)
+        st.write("Interests")
+        st.checkbox("Web Development", value=True)
+        st.checkbox("Machine Learning")
+        st.checkbox("Calisthenics")
+        st.checkbox("Japanese Language")
+        st.progress(75)
 
-with tab2:
-    st.header("Projects & Experience")
-    
-    with st.expander("📊 Data Analytics Dashboard"):
-        st.write("A real-time dashboard tracking global stock market trends.")
-        chart_data = pd.DataFrame({"Trends": [10, 25, 15, 40, 35]})
-        st.line_chart(chart_data)
-        
-    with st.expander("🤖 AI Image Generator"):
-        st.write("An interface for generating art using generative models.")
-        st.progress(85, text="Project Completion")
+elif menu == "Skills":
+    st.header("Technical Skills")
+    skills = {
+        "Python": 85,
+        "Java": 70,
+        "SQL": 75,
+        "HTML/CSS": 80,
+        "JavaScript": 65
+    }
+    for skill, level in skills.items():
+        st.write(skill)
+        st.progress(level)
 
-    st.divider()
-    
-    st.subheader("Technical Proficiency")
-    skill_data = pd.DataFrame({
-        "Skill": ["Backend", "Frontend", "Cloud", "UI/UX"],
-        "Level": [90, 75, 60, 80]
+    st.subheader("Skill Distribution")
+    df = pd.DataFrame({
+        "Skill": list(skills.keys()),
+        "Level": list(skills.values())
     })
-    st.bar_chart(skill_data, x="Skill", y="Level")
+    st.bar_chart(df.set_index("Skill"))
 
-with tab3:
-    st.header("Get In Touch")
-    
+elif menu == "Projects":
+    st.header("Projects")
+    project = st.selectbox(
+        "Select a Project",
+        ["Portfolio Website", "Student Management System", "Data Analysis App"]
+    )
+
+    if project == "Portfolio Website":
+        st.write("A responsive personal website built using HTML, CSS, and JavaScript.")
+        st.button("View Code")
+
+    elif project == "Student Management System":
+        st.write("A CRUD-based system developed using Python and MySQL.")
+        st.button("View Code")
+
+    elif project == "Data Analysis App":
+        st.write("A data visualization tool built using Streamlit and Pandas.")
+        st.button("View Code")
+
+    st.subheader("Project Rating")
+    rating = st.slider("Rate this portfolio", 1, 10, 8)
+    st.write("Rating:", rating)
+
+elif menu == "Experience":
+    st.header("Experience")
+    data = {
+        "Year": ["2022", "2023", "2024"],
+        "Role": ["Intern Developer", "Freelance Developer", "IT Support"],
+        "Company": ["ABC Tech", "Self-Employed", "XYZ Solutions"]
+    }
+    df_exp = pd.DataFrame(data)
+    st.table(df_exp)
+    st.area_chart(pd.DataFrame(np.random.randn(20, 3), columns=["Python", "Java", "SQL"]))
+
+elif menu == "Contact":
+    st.header("Contact Me")
     with st.form("contact_form"):
         name = st.text_input("Name")
         email = st.text_input("Email")
-        msg = st.text_area("Message")
-        rating = st.select_slider("Rate my portfolio", options=["Beginner", "Decent", "Pro", "Mind-blown"])
-        submit = st.form_submit_button("Send Message")
-        
-        if submit:
-            st.balloons()
-            st.write(f"Thanks for reaching out, {name}!")
+        message = st.text_area("Message")
+        submitted = st.form_submit_button("Submit")
+        if submitted:
+            st.success("Message submitted successfully!")
 
-st.divider()
-st.caption(f"Built with ❤️ using Streamlit | {date.today().year}")
+    st.write("Social Links")
+    st.markdown("[GitHub](https://github.com)")
+    st.markdown("[LinkedIn](https://linkedin.com)")
+
+st.sidebar.markdown("---")
+st.sidebar.write("© 2030 Rainric Randy Yu")
