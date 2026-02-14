@@ -16,9 +16,8 @@ menu = st.sidebar.radio(
 if menu == "Home":
     st.header("Welcome")
     st.write("This is my personal Streamlit autobiography and portfolio application.")
-    st.image("https://via.placeholder.com/800x300.png?text=Portfolio+Banner")
-    st.success("Currently open for opportunities.")
-    st.info(f"Last updated: {datetime.now().strftime('%B %d, %Y')}")
+    
+
 
 elif menu == "About Me":
     st.header("About Me")
