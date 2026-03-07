@@ -97,7 +97,15 @@ def get_history():
 apply_messenger_design()
 init_db()
 
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+if "GROQ_API_KEY" in st.secrets:
+    GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
+else:
+    GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+if not GROQ_API_KEY:
+    st.error("API Key missing. Please set GROQ_API_KEY in Secrets or .env file.")
+    st.stop()
+
+
 client = Groq(api_key=GROQ_API_KEY)
 
 with st.sidebar:
