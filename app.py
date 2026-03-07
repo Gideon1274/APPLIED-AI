@@ -4,6 +4,7 @@ import pandas as pd
 from groq import Groq
 import os
 from dotenv import load_dotenv
+
 load_dotenv()
 st.set_page_config(page_title="MindMapper AI", page_icon="🧠", layout="wide")
 
@@ -11,7 +12,10 @@ def apply_messenger_design():
     st.markdown("""
     <style>
         .main { background-color: #0E1117; }
-        section[data-testid="stSidebar"] { background-color: #161B22 !important; border-right: 1px solid #30363D; }
+        section[data-testid="stSidebar"] { 
+            background-color: #161B22 !important; 
+            border-right: 1px solid #30363D; 
+        }
         
         [data-testid="stChatMessage"] {
             background-color: transparent !important;
@@ -20,7 +24,7 @@ def apply_messenger_design():
         }
 
         /* User Message (Right Side) */
-        [data-testid="stChatMessage"][content-visibility="visible"]:has(div[aria-label="chat user"]) {
+        [data-testid="stChatMessage"]:has(div[aria-label="chat user"]) {
             display: flex;
             flex-direction: row-reverse;
             text-align: right;
@@ -30,7 +34,7 @@ def apply_messenger_design():
             color: white !important;
             border-radius: 18px 18px 2px 18px !important;
             padding: 12px 16px !important;
-            margin-left: 20% !important;
+            margin-left: 25% !important;
             width: fit-content !important;
         }
 
@@ -40,7 +44,7 @@ def apply_messenger_design():
             color: #E4E6EB !important;
             border-radius: 18px 18px 18px 2px !important;
             padding: 12px 16px !important;
-            margin-right: 20% !important;
+            margin-right: 25% !important;
             width: fit-content !important;
         }
 
@@ -97,19 +101,20 @@ def get_history():
 apply_messenger_design()
 init_db()
 
+# Security Handlers
 if "GROQ_API_KEY" in st.secrets:
     GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
 else:
     GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-if not GROQ_API_KEY:
-    st.error("API Key missing. Please set GROQ_API_KEY in Secrets or .env file.")
-    st.stop()
 
+if not GROQ_API_KEY:
+    st.error("API Key missing.")
+    st.stop()
 
 client = Groq(api_key=GROQ_API_KEY)
 
 with st.sidebar:
-    st.title("Settings")
+    st.title("MindMapper Settings")
     mood_score = st.slider("Mood Intensity", 1, 10, 5)
     emotion = st.selectbox("Primary Feeling", ["Overwhelmed", "Anxious", "Stressed", "Sad", "Calm", "Hopeful"])
     
@@ -119,7 +124,7 @@ with st.sidebar:
         st.session_state.messages.append({"role": "assistant", "content": initial_msg})
 
     st.divider()
-    st.subheader("Session History")
+    st.subheader("Previous Logs")
     history = get_history()
     if not history.empty:
         st.dataframe(history, use_container_width=True)
@@ -166,7 +171,7 @@ if st.button("Close & Save Session"):
         try:
             summary_completion = client.chat.completions.create(
                 messages=[
-                    {"role": "system", "content": "Summarize session themes and one affirmation."},
+                    {"role": "system", "content": "Summarize session themes and provide one affirmation."},
                     *st.session_state.messages
                 ],
                 model="llama-3.3-70b-versatile",
