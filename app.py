@@ -2,8 +2,10 @@ import streamlit as st
 from groq import Groq
 import os
 from dotenv import load_dotenv
+import PyPDF2
+import io
 
-# --- INITIAL CONFIG ---
+
 load_dotenv()
 st.set_page_config(page_title="MindMapper AI", page_icon="🧠", layout="wide")
 
@@ -75,10 +77,26 @@ def inject_maximized_styles():
             color: #050608;
             box-shadow: 0 0 20px rgba(0, 255, 195, 0.4);
         }
+
+        /* Breathing Animation */
+        @keyframes breathe {
+            0% { transform: scale(1); opacity: 0.3; }
+            50% { transform: scale(1.1); opacity: 0.7; }
+            100% { transform: scale(1); opacity: 0.3; }
+        }
+        .breathing-circle {
+            width: 100px;
+            height: 100px;
+            background: #00FFC3;
+            border-radius: 50%;
+            margin: 20px auto;
+            animation: breathe 8s ease-in-out infinite;
+            filter: blur(20px);
+        }
     </style>
     """, unsafe_allow_html=True)
 
-# --- SYSTEM PROMPT (STRICT PROPOSAL ADHERENCE) ---
+
 SYSTEM_PROMPT = """
 You are MindMapper, a warm, non-judgmental AI journaling companion.
 Your tone is calm, curious, and encouraging.
@@ -93,16 +111,21 @@ CORE INSTRUCTIONS:
 """
 
 def get_groq_client():
-    # api_key = os.getenv("GROQ_API_KEY")
-    api_key = st.secrets["GROQ_API_KEY"]
+    # Try .env (local) first, then st.secrets (deployment)
+    api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
-        st.error("GROQ_API_KEY environment variable is missing.")
+        try:
+            api_key = st.secrets["GROQ_API_KEY"]
+        except:
+            api_key = None
+            
+    if not api_key:
+        st.error("GROQ_API_KEY not found in .env or Streamlit Secrets.")
         st.stop()
     return Groq(api_key=api_key)
 
 def stream_response(messages):
     client = get_groq_client()
-    # Automatic selection of the high-perf free tier model
     stream = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
         messages=messages,
@@ -112,10 +135,49 @@ def stream_response(messages):
         if chunk.choices[0].delta.content:
             yield chunk.choices[0].delta.content
 
+def analyze_file(file):
+    text = ""
+    if file.type == "text/plain":
+        text = file.read().decode("utf-8")
+    elif file.type == "application/pdf":
+        pdf_reader = PyPDF2.PdfReader(io.BytesIO(file.read()))
+        for page in pdf_reader.pages:
+            text += page.extract_text()
+    
+    if text:
+        client = get_groq_client()
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "system", "content": "You are a specialized journal analyzer. Extract the core emotional themes and recurring patterns from this text. Keep it brief and supportive."},
+                {"role": "user", "content": f"Analyze this journal entry:\n\n{text[:4000]}"} # Limit to 4k chars
+            ]
+        )
+        return response.choices[0].message.content
+    return "Could not extract text from file."
+
+def generate_summary(history):
+    if not history:
+        return "No conversation to summarize yet."
+    
+    client = get_groq_client()
+    chat_text = "\n".join([f"{m['role']}: {m['content']}" for m in history])
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[
+            {"role": "system", "content": "Generate a beautiful, concise summary of this therapy/journaling session. Highlight the breakthroughs and provide a single powerful affirmation."},
+            {"role": "user", "content": f"Summarize this session:\n\n{chat_text}"}
+        ]
+    )
+    return response.choices[0].message.content
+
 def main():
     inject_maximized_styles()
     
-    # --- SIDEBAR (WIREAFRAME COMPLIANT) ---
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+
+    # --- SIDEBAR ---
     with st.sidebar:
         st.markdown("<h1 style='color:#00FFC3;'>Control</h1>", unsafe_allow_html=True)
         
@@ -130,7 +192,11 @@ def main():
 
         st.divider()
         st.markdown("### Journal Analysis")
-        st.file_uploader("Import .txt or .pdf", type=['txt', 'pdf'])
+        uploaded_file = st.file_uploader("Import .txt or .pdf", type=['txt', 'pdf'])
+        if uploaded_file:
+            with st.spinner("Analyzing your history..."):
+                analysis = analyze_file(uploaded_file)
+                st.info(f"**Historical Insight:**\n\n{analysis}")
         
         st.divider()
         if st.button("Emergency Support"):
@@ -143,14 +209,12 @@ def main():
     # Breathing Widget: Revealed if distress >= 7
     if mood_intensity >= 7:
         st.markdown("""
-            <div style="background:rgba(0,255,195,0.05); padding:25px; border-radius:20px; border:1px solid #00FFC3; margin-bottom:2rem;">
+            <div style="background:rgba(0,255,195,0.05); padding:25px; border-radius:20px; border:1px solid #00FFC3; margin-bottom:2rem; text-align:center;">
                 <h3 style="margin:0; color:#00FFC3;">🧘 Grounding Active</h3>
-                <p style="margin:10px 0 0 0; color:#E4E6EB; font-size:1.1rem;">Inhale 4s ... Hold 7s ... Exhale 8s. Focus on your breath.</p>
+                <div class="breathing-circle"></div>
+                <p style="margin:10px 0 0 0; color:#E4E6EB; font-size:1.1rem;">Inhale 4s ... Hold 7s ... Exhale 8s. Focus on the light.</p>
             </div>
         """, unsafe_allow_html=True)
-
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
 
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
@@ -169,8 +233,10 @@ def main():
     # Footer Actions
     st.markdown("<br><br>", unsafe_allow_html=True)
     if st.button("Generate Session Summary"):
-        st.markdown("---")
-        st.success("**Session Summary Complete**\n\n**Themes:** Emotional processing and pattern recognition.\n\n**Affirmation:** You are handling your world with more strength than you realize.")
+        with st.spinner("Synthesizing your journey..."):
+            summary = generate_summary(st.session_state.messages)
+            st.markdown("---")
+            st.success(f"**Session Summary Complete**\n\n{summary}")
 
 if __name__ == "__main__":
     main()
