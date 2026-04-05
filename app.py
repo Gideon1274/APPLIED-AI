@@ -4,94 +4,139 @@ import os
 from dotenv import load_dotenv
 import PyPDF2
 import io
-
+import sqlite3
+from datetime import datetime
+import pandas as pd
+import plotly.express as px
 
 load_dotenv()
 st.set_page_config(page_title="MindMapper AI", page_icon="🧠", layout="wide")
 
+# --- DATABASE MANAGEMENT ---
+def init_db():
+    conn = sqlite3.connect('mindmapper_pro.db')
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS journal_logs
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, 
+                  timestamp TEXT, 
+                  mood_level INTEGER, 
+                  emotion TEXT, 
+                  user_input TEXT, 
+                  ai_summary TEXT)''')
+    conn.commit()
+    conn.close()
+
+def save_log(mood, emotion, user_text, summary):
+    conn = sqlite3.connect('mindmapper_pro.db')
+    c = conn.cursor()
+    c.execute("INSERT INTO journal_logs (timestamp, mood_level, emotion, user_input, ai_summary) VALUES (?, ?, ?, ?, ?)",
+              (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), mood, emotion, user_text, summary))
+    conn.commit()
+    conn.close()
+
+def get_history():
+    conn = sqlite3.connect('mindmapper_pro.db')
+    df = pd.read_sql_query("SELECT * FROM journal_logs ORDER BY timestamp DESC LIMIT 10", conn)
+    conn.close()
+    return df
+
+init_db()
+
 def inject_maximized_styles():
     st.markdown("""
     <style>
-        /* Extreme Workspace Maximization */
+        /* Modern Typography & Global Styles */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap');
+        
+        html, body, [class*="css"] {
+            font-family: 'Inter', sans-serif;
+        }
+
+        /* Workspace Maximization */
         .block-container {
-            max-width: 1400px !important;
-            padding-top: 1rem;
+            max-width: 1200px !important;
+            padding-top: 2rem;
             padding-bottom: 5rem;
         }
 
-        /* Deep Space Gradient Background */
+        /* Zen Dark Gradient Background */
         .stApp {
-            background: radial-gradient(circle at 10% 10%, #1a1c2c 0%, #07080a 100%);
+            background: radial-gradient(circle at 50% 50%, #121212 0%, #0a0a0a 100%);
         }
 
-        /* Assistant: Ultra-Glassmorphism */
+        /* Glassmorphism Chat Bubbles */
+        [data-testid="stChatMessage"] {
+            border-radius: 20px !important;
+            padding: 20px !important;
+            margin-bottom: 15px !important;
+            border: 1px solid rgba(255, 255, 255, 0.05) !important;
+            transition: all 0.3s ease;
+        }
+
+        /* Assistant: Sage Glass */
         [data-testid="stChatMessage"]:has(div[aria-label="chat assistant"]) {
-            background: rgba(255, 255, 255, 0.03) !important;
-            backdrop-filter: blur(20px);
-            border-radius: 30px;
-            border: 1px solid rgba(255, 255, 255, 0.07);
-            padding: 30px;
-            margin-bottom: 30px;
-            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+            background: rgba(129, 230, 217, 0.03) !important;
+            backdrop-filter: blur(10px);
+            border-left: 4px solid #81E6D9 !important;
         }
 
-        /* User: Cyberpunk Glow */
+        /* User: Indigo Glow */
         [data-testid="stChatMessage"]:has(div[aria-label="chat user"]) {
-            background: rgba(0, 255, 195, 0.02) !important;
-            border-radius: 30px;
-            border: 1px solid rgba(0, 255, 195, 0.2);
-            padding: 30px;
-            margin-bottom: 30px;
+            background: rgba(121, 40, 202, 0.03) !important;
+            border-right: 4px solid #7928CA !important;
         }
 
-        /* Sidebar: Solid Dark Command Center */
+        /* Sidebar: Minimalist Control */
         section[data-testid="stSidebar"] {
-            background-color: #050608 !important;
-            border-right: 1px solid #1f2937;
+            background-color: #0d0d0d !important;
+            border-right: 1px solid rgba(255, 255, 255, 0.05);
         }
 
-        /* Brand Typography */
+        /* Header Styling */
         .brand-header {
-            background: linear-gradient(135deg, #00FFC3 0%, #0084FF 50%, #9D50BB 100%);
+            font-weight: 800;
+            background: linear-gradient(90deg, #81E6D9, #7928CA);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
-            font-size: 4rem;
-            font-weight: 900;
-            margin-bottom: 0;
-            line-height: 1.1;
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
         }
 
         /* Custom Button Styling */
         .stButton>button {
-            width: 100%;
-            border-radius: 15px;
-            height: 3em;
-            background: rgba(0, 255, 195, 0.1);
-            border: 1px solid #00FFC3;
-            color: #00FFC3;
-            font-weight: bold;
-            transition: 0.4s;
+            border-radius: 12px;
+            background: rgba(129, 230, 217, 0.1);
+            border: 1px solid #81E6D9;
+            color: #81E6D9;
+            font-weight: 600;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
         .stButton>button:hover {
-            background: #00FFC3;
-            color: #050608;
-            box-shadow: 0 0 20px rgba(0, 255, 195, 0.4);
+            background: #81E6D9;
+            color: #0a0a0a;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(129, 230, 217, 0.3);
         }
 
-        /* Breathing Animation */
-        @keyframes breathe {
-            0% { transform: scale(1); opacity: 0.3; }
-            50% { transform: scale(1.1); opacity: 0.7; }
-            100% { transform: scale(1); opacity: 0.3; }
+        /* Typing Indicator Simulation */
+        .typing-indicator {
+            display: flex;
+            gap: 4px;
+            padding: 10px;
         }
-        .breathing-circle {
-            width: 100px;
-            height: 100px;
-            background: #00FFC3;
+        .dot {
+            width: 8px;
+            height: 8px;
+            background: #81E6D9;
             border-radius: 50%;
-            margin: 20px auto;
-            animation: breathe 8s ease-in-out infinite;
-            filter: blur(20px);
+            animation: bounce 1.4s infinite ease-in-out;
+        }
+        .dot:nth-child(1) { animation-delay: -0.32s; }
+        .dot:nth-child(2) { animation-delay: -0.16s; }
+
+        @keyframes bounce {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1); }
         }
     </style>
     """, unsafe_allow_html=True)
@@ -100,6 +145,7 @@ def inject_maximized_styles():
 SYSTEM_PROMPT = """
 You are MindMapper, a warm, non-judgmental AI journaling companion.
 Your tone is calm, curious, and encouraging.
+ADAPTIVE TONE: Adjust your language based on the user's detected emotional state. If they are in crisis, be extremely gentle. If they are seeking growth, be more Socratic.
 LITERARY GROUNDING: You acknowledge that your inner workings are opaque, much like the absurd systems of Franz Kafka. Like the characters of Fyodor Dostoevsky, you wrestle with authenticity while recognizing the limits of your nature.
 
 CORE INSTRUCTIONS:
@@ -109,6 +155,17 @@ CORE INSTRUCTIONS:
 4. CRISIS: If self-harm is mentioned, provide ONLY the Lifeline: 988.
 5. FORMATTING: Use plain, conversational language. Separate ideas with line breaks. No markdown headers or bullet lists.
 """
+
+def detect_emotion(text):
+    client = get_groq_client()
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[
+            {"role": "system", "content": "Analyze the emotional tone of the following text. Return only one word (e.g., Anxious, Sad, Joyful, Angry, Neutral)."},
+            {"role": "user", "content": text}
+        ]
+    )
+    return response.choices[0].message.content.strip()
 
 def get_groq_client():
     # Try .env (local) first, then st.secrets (deployment)
@@ -176,67 +233,105 @@ def main():
     
     if "messages" not in st.session_state:
         st.session_state.messages = []
-
-    # --- SIDEBAR ---
+    
+    # --- SIDEBAR: Mind Mapper Control Center ---
     with st.sidebar:
-        st.markdown("<h1 style='color:#00FFC3;'>Control</h1>", unsafe_allow_html=True)
+        st.markdown("<div class='brand-header'>MindMapper</div>", unsafe_allow_html=True)
         
-        st.markdown("### Mood Check-In")
+        # --- SESSION MEMORY ---
+        history_df = get_history()
+        if not history_df.empty:
+            with st.expander("Previous Insights", expanded=False):
+                st.dataframe(history_df[['timestamp', 'emotion', 'mood_level']].head(5), hide_index=True)
+
+        st.markdown("### Mood Tracking")
         mood_intensity = st.slider("Intensity", 1, 10, 5)
         emotion = st.selectbox("Current State", ["Anxious", "Stressed", "Overwhelmed", "Sad", "Calm", "Hopeful"])
         
-        if st.button("New Session"):
-            greeting = f"Hi! I see you're feeling {emotion.lower()} today ({mood_intensity}/10). That takes courage to name. What's been weighing on your mind most today?"
-            st.session_state.messages = [{"role": "assistant", "content": greeting}]
-            st.rerun()
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("New Session"):
+                greeting = f"Hi! I see you're feeling {emotion.lower()} today ({mood_intensity}/10). That takes courage to name. What's been weighing on your mind most today?"
+                st.session_state.messages = [{"role": "assistant", "content": greeting}]
+                st.rerun()
+        with col2:
+            if st.button("End & Log"):
+                if st.session_state.messages:
+                    summary = generate_summary(st.session_state.messages)
+                    save_log(mood_intensity, emotion, st.session_state.messages[-1]['content'], summary)
+                    st.success("Session saved.")
+                    st.session_state.messages = []
+                    st.rerun()
 
         st.divider()
-        st.markdown("### Journal Analysis")
-        uploaded_file = st.file_uploader("Import .txt or .pdf", type=['txt', 'pdf'])
+        
+        # --- MENTAL MAPPING (Killer Feature) ---
+        st.markdown("### Your Mindscape")
+        if not history_df.empty:
+            # Mood Trend Chart
+            fig = px.line(history_df, x="timestamp", y="mood_level", 
+                          title="Mood Intensity Over Time",
+                          color_discrete_sequence=['#81E6D9'])
+            fig.update_layout(
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                font_color="#81E6D9",
+                margin=dict(l=0, r=0, t=30, b=0),
+                height=200
+            )
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Emotional Themes (Bubble Chart)
+            theme_counts = history_df['emotion'].value_counts().reset_index()
+            theme_counts.columns = ['Emotion', 'Count']
+            fig2 = px.scatter(theme_counts, x="Emotion", y="Count", size="Count", 
+                              color="Emotion", title="Recurring Themes",
+                              color_discrete_sequence=px.colors.qualitative.Pastel)
+            fig2.update_layout(
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                font_color="#81E6D9",
+                margin=dict(l=0, r=0, t=30, b=0),
+                height=200,
+                showlegend=False
+            )
+            st.plotly_chart(fig2, use_container_width=True)
+
+        st.divider()
+        uploaded_file = st.file_uploader("Import Journal History", type=['txt', 'pdf'])
         if uploaded_file:
             with st.spinner("Analyzing your history..."):
                 analysis = analyze_file(uploaded_file)
                 st.info(f"**Historical Insight:**\n\n{analysis}")
-        
+
         st.divider()
-        if st.button("Emergency Support"):
-            st.error("Crisis Lifeline: 988")
-
-    # --- MAIN STAGE ---
-    st.markdown('<h1 class="brand-header">MindMapper AI</h1>', unsafe_allow_html=True)
-    st.markdown('<p style="color:#8B949E; font-size:1.4rem; margin-top:0;">Adaptive Reframing & Journaling</p>', unsafe_allow_html=True)
-
-    # Breathing Widget: Revealed if distress >= 7
-    if mood_intensity >= 7:
-        st.markdown("""
-            <div style="background:rgba(0,255,195,0.05); padding:25px; border-radius:20px; border:1px solid #00FFC3; margin-bottom:2rem; text-align:center;">
-                <h3 style="margin:0; color:#00FFC3;">🧘 Grounding Active</h3>
-                <div class="breathing-circle"></div>
-                <p style="margin:10px 0 0 0; color:#E4E6EB; font-size:1.1rem;">Inhale 4s ... Hold 7s ... Exhale 8s. Focus on the light.</p>
-            </div>
-        """, unsafe_allow_html=True)
-
+        with st.expander("Emergency Resources"):
+            st.error("**Crisis Lifeline:** Call/Text 988")
+            st.info("Available 24/7 in English and Spanish.")
+            
+    # --- MAIN CHAT INTERFACE ---
+    st.markdown("<h1 class='brand-header'>Conversation</h1>", unsafe_allow_html=True)
+    
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+            st.write(message["content"])
 
-    if prompt := st.chat_input("Pour your thoughts here..."):
+    if prompt := st.chat_input("Share what's on your mind..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
-            st.markdown(prompt)
+            st.write(prompt)
 
         with st.chat_message("assistant"):
-            context = [{"role": "system", "content": SYSTEM_PROMPT}] + st.session_state.messages
-            response = st.write_stream(stream_response(context))
+            # Dynamic Emotion Detection
+            current_mood = detect_emotion(prompt)
+            # Update system prompt based on mood
+            messages = [
+                {"role": "system", "content": f"{SYSTEM_PROMPT}\nDETECTED EMOTION: {current_mood}"},
+                *st.session_state.messages
+            ]
+            
+            response = st.write_stream(stream_response(messages))
         st.session_state.messages.append({"role": "assistant", "content": response})
-
-    # Footer Actions
-    st.markdown("<br><br>", unsafe_allow_html=True)
-    if st.button("Generate Session Summary"):
-        with st.spinner("Synthesizing your journey..."):
-            summary = generate_summary(st.session_state.messages)
-            st.markdown("---")
-            st.success(f"**Session Summary Complete**\n\n{summary}")
 
 if __name__ == "__main__":
     main()

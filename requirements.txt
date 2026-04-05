@@ -3,3 +3,4 @@ groq
 pandas
 python-dotenv
 PyPDF2
+plotly
