@@ -157,15 +157,19 @@ CORE INSTRUCTIONS:
 """
 
 def detect_emotion(text):
-    client = get_groq_client()
-    response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=[
-            {"role": "system", "content": "Analyze the emotional tone of the following text. Return only one word (e.g., Anxious, Sad, Joyful, Angry, Neutral)."},
-            {"role": "user", "content": text}
-        ]
-    )
-    return response.choices[0].message.content.strip()
+    try:
+        client = get_groq_client()
+        response = client.chat.completions.create(
+            model="llama3-8b-8192", # Faster and more reliable for utility tasks
+            messages=[
+                {"role": "system", "content": "Analyze the emotional tone of the following text. Return only one word (e.g., Anxious, Sad, Joyful, Angry, Neutral)."},
+                {"role": "user", "content": text}
+            ]
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        print(f"Emotion detection error: {e}")
+        return "Neutral" # Fallback
 
 def get_groq_client():
     # Try .env (local) first, then st.secrets (deployment)
@@ -182,51 +186,60 @@ def get_groq_client():
     return Groq(api_key=api_key)
 
 def stream_response(messages):
-    client = get_groq_client()
-    stream = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=messages,
-        stream=True,
-    )
-    for chunk in stream:
-        if chunk.choices[0].delta.content:
-            yield chunk.choices[0].delta.content
+    try:
+        client = get_groq_client()
+        stream = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=messages,
+            stream=True,
+        )
+        for chunk in stream:
+            if chunk.choices[0].delta.content:
+                yield chunk.choices[0].delta.content
+    except Exception as e:
+        yield f"I'm sorry, I'm having a bit of trouble connecting right now. (Error: {e})"
 
 def analyze_file(file):
-    text = ""
-    if file.type == "text/plain":
-        text = file.read().decode("utf-8")
-    elif file.type == "application/pdf":
-        pdf_reader = PyPDF2.PdfReader(io.BytesIO(file.read()))
-        for page in pdf_reader.pages:
-            text += page.extract_text()
-    
-    if text:
-        client = get_groq_client()
-        response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[
-                {"role": "system", "content": "You are a specialized journal analyzer. Extract the core emotional themes and recurring patterns from this text. Keep it brief and supportive."},
-                {"role": "user", "content": f"Analyze this journal entry:\n\n{text[:4000]}"} # Limit to 4k chars
-            ]
-        )
-        return response.choices[0].message.content
+    try:
+        text = ""
+        if file.type == "text/plain":
+            text = file.read().decode("utf-8")
+        elif file.type == "application/pdf":
+            pdf_reader = PyPDF2.PdfReader(io.BytesIO(file.read()))
+            for page in pdf_reader.pages:
+                text += page.extract_text()
+        
+        if text:
+            client = get_groq_client()
+            response = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[
+                    {"role": "system", "content": "You are a specialized journal analyzer. Extract the core emotional themes and recurring patterns from this text. Keep it brief and supportive."},
+                    {"role": "user", "content": f"Analyze this journal entry:\n\n{text[:4000]}"} # Limit to 4k chars
+                ]
+            )
+            return response.choices[0].message.content
+    except Exception as e:
+        return f"Error analyzing file: {e}"
     return "Could not extract text from file."
 
 def generate_summary(history):
     if not history:
         return "No conversation to summarize yet."
     
-    client = get_groq_client()
-    chat_text = "\n".join([f"{m['role']}: {m['content']}" for m in history])
-    response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=[
-            {"role": "system", "content": "Generate a beautiful, concise summary of this therapy/journaling session. Highlight the breakthroughs and provide a single powerful affirmation."},
-            {"role": "user", "content": f"Summarize this session:\n\n{chat_text}"}
-        ]
-    )
-    return response.choices[0].message.content
+    try:
+        client = get_groq_client()
+        chat_text = "\n".join([f"{m['role']}: {m['content']}" for m in history])
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "system", "content": "Generate a beautiful, concise summary of this therapy/journaling session. Highlight the breakthroughs and provide a single powerful affirmation."},
+                {"role": "user", "content": f"Summarize this session:\n\n{chat_text}"}
+            ]
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        return f"Error generating summary: {e}"
 
 def main():
     inject_maximized_styles()
