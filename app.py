@@ -89,12 +89,21 @@ def inject_styles():
             section[data-testid="stSidebar"] { background-color: rgba(5, 8, 15, 0.92) !important; border-right: 1px solid rgba(255,255,255,0.06); }
             .mm-title { font-size: 2.4rem; font-weight: 800; line-height: 1.05; margin: 0; background: linear-gradient(90deg, #81E6D9, #7928CA); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
             .mm-subtitle { color: rgba(255,255,255,0.7); margin-top: 0.4rem; }
+            .mm-hero { border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.03); border-radius: 18px; padding: 18px 18px; margin-bottom: 14px; backdrop-filter: blur(10px); }
+            .mm-hero-row { display:flex; justify-content:space-between; gap: 12px; align-items:flex-start; flex-wrap:wrap; }
+            .mm-hero-right { display:flex; gap: 8px; align-items:center; flex-wrap:wrap; }
+            .mm-chip { display:inline-flex; gap: 8px; align-items:center; padding: 0.25rem 0.65rem; border-radius: 999px; font-size: 0.85rem; border: 1px solid rgba(255,255,255,0.12); color: rgba(255,255,255,0.85); background: rgba(255,255,255,0.04); }
             [data-testid="stChatMessage"] { border-radius: 18px !important; padding: 18px !important; margin-bottom: 12px !important; border: 1px solid rgba(255,255,255,0.06) !important; }
             [data-testid="stChatMessage"]:has(div[aria-label="chat assistant"]) { background: rgba(129, 230, 217, 0.03) !important; backdrop-filter: blur(10px); border-left: 4px solid rgba(129, 230, 217, 0.6) !important; }
             [data-testid="stChatMessage"]:has(div[aria-label="chat user"]) { background: rgba(121, 40, 202, 0.03) !important; border-right: 4px solid rgba(121, 40, 202, 0.6) !important; }
             .stButton>button { border-radius: 12px; background: rgba(129,230,217,0.14); border: 1px solid rgba(129,230,217,0.55); color: #dffdf8; font-weight: 700; }
             .stButton>button:hover { background: rgba(129,230,217,0.26); border: 1px solid rgba(129,230,217,0.75); }
             .mm-badge { display:inline-block; padding: 0.25rem 0.6rem; border-radius: 999px; font-size: 0.85rem; border: 1px solid rgba(255,255,255,0.12); color: rgba(255,255,255,0.8); background: rgba(255,255,255,0.04); }
+            div[data-testid="stChatInput"] textarea { border-radius: 14px !important; border: 1px solid rgba(255,255,255,0.14) !important; background: rgba(255,255,255,0.04) !important; }
+            div[data-testid="stChatInput"] textarea:focus { box-shadow: 0 0 0 2px rgba(129,230,217,0.25) !important; border-color: rgba(129,230,217,0.45) !important; }
+            .mm-muted { color: rgba(255,255,255,0.68); }
+            .mm-small { font-size: 0.9rem; }
+            .mm-divider { height: 1px; background: rgba(255,255,255,0.08); margin: 10px 0; }
         </style>
         """,
         unsafe_allow_html=True,
@@ -290,6 +299,10 @@ def respond_agent(user_text, mood_level, emotion, messages, kb):
         kb_hits = retrieve_kb(kb, plan["query"], top_k=4)
     elif plan["tool"] == "memory":
         mem_hits = search_logs(plan["query"], limit=6)
+    st.session_state.last_tool = plan["tool"]
+    st.session_state.last_tool_query = plan.get("query", "")
+    st.session_state.last_kb_hits = kb_hits
+    st.session_state.last_mem_hits = mem_hits
     context = build_context_block(kb_hits, mem_hits)
     sys = SYSTEM_PROMPT + f"\nMood check-in: {emotion} ({mood_level}/10)\n"
     if context:
@@ -325,58 +338,25 @@ if "kb" not in st.session_state:
     st.session_state.kb = None
 if "kb_name" not in st.session_state:
     st.session_state.kb_name = ""
+if "show_sources" not in st.session_state:
+    st.session_state.show_sources = True
+if "last_tool" not in st.session_state:
+    st.session_state.last_tool = "none"
+if "last_tool_query" not in st.session_state:
+    st.session_state.last_tool_query = ""
+if "last_kb_hits" not in st.session_state:
+    st.session_state.last_kb_hits = []
+if "last_mem_hits" not in st.session_state:
+    st.session_state.last_mem_hits = []
 
-with st.sidebar:
-    st.markdown("<p class='mm-title'>MindMapper</p>", unsafe_allow_html=True)
-    st.markdown("<p class='mm-subtitle'>Adaptive journaling with RAG + tools</p>", unsafe_allow_html=True)
-    st.divider()
-    mood_level = st.slider("Intensity", 1, 10, 5)
-    emotion = st.selectbox("Current State", ["Anxious", "Stressed", "Overwhelmed", "Sad", "Calm", "Hopeful"])
-    st.divider()
-    uploaded = st.file_uploader("Knowledge Base (.pdf or .txt)", type=["pdf", "txt"])
-    if uploaded is not None:
-        raw_text = extract_text_from_upload(uploaded)
-        if raw_text and looks_like_injection(raw_text):
-            st.error("This upload contains suspicious instructions. Please upload a clean document.")
-        elif raw_text:
-            with st.spinner("Indexing knowledge base..."):
-                st.session_state.kb = build_kb_index(raw_text[:120000])
-                st.session_state.kb_name = uploaded.name
-            st.success("Knowledge base ready.")
-    if st.session_state.kb and st.session_state.kb.get("chunks"):
-        st.markdown(f"<span class='mm-badge'>KB: {st.session_state.kb_name} • {len(st.session_state.kb['chunks'])} chunks</span>", unsafe_allow_html=True)
-        if st.button("Clear Knowledge Base"):
-            st.session_state.kb = None
-            st.session_state.kb_name = ""
-            st.rerun()
-    st.divider()
-    with st.expander("Recent Sessions"):
-        rows = get_recent_logs(limit=8)
-        if rows:
-            for ts, emo, ml, ui, sm in rows:
-                st.caption(f"{ts} • {emo} • {ml}/10")
-                if sm:
-                    st.write(sm[:240])
-        else:
-            st.caption("No saved sessions yet.")
-    with st.expander("Emergency Resources"):
-        st.error("Crisis Lifeline: 988")
-
-st.markdown("<p class='mm-title'>Conversation</p>", unsafe_allow_html=True)
-
-for msg in st.session_state.messages:
-    with st.chat_message(msg["role"]):
-        st.write(msg["content"])
-
-prompt = st.chat_input("Share what's on your mind...")
-if prompt:
-    st.session_state.messages.append({"role": "user", "content": prompt})
+def handle_user_prompt(user_text, mood_level, emotion):
+    st.session_state.messages.append({"role": "user", "content": user_text})
     with st.chat_message("user"):
-        st.write(prompt)
+        st.write(user_text)
     with st.chat_message("assistant"):
         out = st.write_stream(
             respond_agent(
-                user_text=prompt,
+                user_text=user_text,
                 mood_level=mood_level,
                 emotion=emotion,
                 messages=st.session_state.messages,
@@ -385,10 +365,129 @@ if prompt:
         )
     st.session_state.messages.append({"role": "assistant", "content": out})
 
+with st.sidebar:
+    st.markdown("<p class='mm-title'>MindMapper</p>", unsafe_allow_html=True)
+    st.markdown("<p class='mm-subtitle'>Adaptive journaling with RAG + tools</p>", unsafe_allow_html=True)
+    st.divider()
+    with st.expander("Mood Check-In", expanded=True):
+        mood_level = st.slider("Intensity", 1, 10, 5)
+        emotion = st.selectbox("Current State", ["Anxious", "Stressed", "Overwhelmed", "Sad", "Calm", "Hopeful"])
+    st.divider()
+    with st.expander("Knowledge Base (RAG)", expanded=True):
+        uploaded = st.file_uploader("Upload .pdf or .txt", type=["pdf", "txt"])
+        if uploaded is not None:
+            raw_text = extract_text_from_upload(uploaded)
+            if raw_text and looks_like_injection(raw_text):
+                st.error("This upload contains suspicious instructions. Please upload a clean document.")
+            elif raw_text:
+                with st.spinner("Indexing knowledge base..."):
+                    st.session_state.kb = build_kb_index(raw_text[:120000])
+                    st.session_state.kb_name = uploaded.name
+                st.success("Knowledge base ready.")
+        if st.session_state.kb and st.session_state.kb.get("chunks"):
+            st.markdown(f"<span class='mm-badge'>Loaded: {st.session_state.kb_name}</span>", unsafe_allow_html=True)
+            st.caption(f"{len(st.session_state.kb['chunks'])} chunks indexed")
+            if st.button("Clear Knowledge Base"):
+                st.session_state.kb = None
+                st.session_state.kb_name = ""
+                st.rerun()
+    st.divider()
+    with st.expander("Session Memory", expanded=False):
+        mem_query = st.text_input("Search saved sessions", placeholder="e.g., anxiety, work, family")
+        if mem_query:
+            hits = search_logs(mem_query, limit=6)
+            if hits:
+                for ts, emo, ml, ui, sm in hits:
+                    st.caption(f"{ts} • {emo} • {ml}/10")
+                    if sm:
+                        st.write(sm[:220])
+            else:
+                st.caption("No matches.")
+        st.markdown("<div class='mm-divider'></div>", unsafe_allow_html=True)
+        rows = get_recent_logs(limit=6)
+        if rows:
+            for ts, emo, ml, ui, sm in rows:
+                st.caption(f"{ts} • {emo} • {ml}/10")
+                if sm:
+                    st.write(sm[:220])
+        else:
+            st.caption("No saved sessions yet.")
+    st.divider()
+    st.session_state.show_sources = st.toggle("Show sources & tool trace", value=st.session_state.show_sources)
+    with st.expander("Emergency Resources"):
+        st.error("Crisis Lifeline: 988")
+
+kb_label = "KB: none"
+if st.session_state.kb and st.session_state.kb.get("chunks"):
+    kb_label = f"KB: {st.session_state.kb_name} ({len(st.session_state.kb['chunks'])} chunks)"
+
+st.markdown(
+    f"""
+    <div class='mm-hero'>
+      <div class='mm-hero-row'>
+        <div>
+          <p class='mm-title'>MindMapper AI</p>
+          <p class='mm-subtitle mm-small'>RAG for grounded answers • Agent tools for memory • Prompt defenses enabled</p>
+        </div>
+        <div class='mm-hero-right'>
+          <span class='mm-chip'>Mood: {emotion} • {mood_level}/10</span>
+          <span class='mm-chip'>{kb_label}</span>
+        </div>
+      </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        st.write(msg["content"])
+
+if not st.session_state.messages:
+    st.markdown("<p class='mm-muted'>Start with one of these:</p>", unsafe_allow_html=True)
+    q1, q2, q3, q4 = st.columns(4)
+    with q1:
+        if st.button("Reflect my mood"):
+            handle_user_prompt("I want to check in. Reflect what you notice from my mood and ask me one gentle question.", mood_level, emotion)
+    with q2:
+        if st.button("Help me reframe"):
+            handle_user_prompt("Help me reframe a stressful thought using a gentle CBT-style question.", mood_level, emotion)
+    with q3:
+        if st.button("Use my memory"):
+            handle_user_prompt("Based on my previous sessions, what patterns do you notice? Ask one question.", mood_level, emotion)
+    with q4:
+        if st.button("Use my upload"):
+            handle_user_prompt("Based on the uploaded document, what are the key themes? Ask one question.", mood_level, emotion)
+
+prompt = st.chat_input("Share what's on your mind…")
+if prompt:
+    handle_user_prompt(prompt, mood_level, emotion)
+
+if st.session_state.show_sources:
+    with st.expander("Sources & Tool Trace", expanded=False):
+        st.write(f"Tool used: {st.session_state.last_tool}")
+        if st.session_state.last_tool_query:
+            st.caption(f"Tool query: {st.session_state.last_tool_query}")
+        if st.session_state.last_kb_hits:
+            st.markdown("<p class='mm-muted'>Knowledge base excerpts</p>", unsafe_allow_html=True)
+            for h in st.session_state.last_kb_hits:
+                st.markdown(f"<span class='mm-badge'>KB {h['chunk_id']} • score {h['score']:.3f}</span>", unsafe_allow_html=True)
+                st.write(h["text"][:900])
+        if st.session_state.last_mem_hits:
+            st.markdown("<p class='mm-muted'>Session memory hits</p>", unsafe_allow_html=True)
+            for ts, emo, ml, ui, sm in st.session_state.last_mem_hits:
+                st.markdown(f"<span class='mm-badge'>{ts} • {emo} • {ml}/10</span>", unsafe_allow_html=True)
+                if sm:
+                    st.write(sm[:320])
+
 col_a, col_b = st.columns([1, 1])
 with col_a:
     if st.button("New Session"):
         st.session_state.messages = []
+        st.session_state.last_tool = "none"
+        st.session_state.last_tool_query = ""
+        st.session_state.last_kb_hits = []
+        st.session_state.last_mem_hits = []
         st.rerun()
 with col_b:
     if st.button("End & Save"):
@@ -401,3 +500,5 @@ with col_b:
                     break
             save_log(mood_level, emotion, user_last, summary)
             st.success("Session saved.")
+            if summary:
+                st.download_button("Download summary (.txt)", data=summary, file_name="mindmapper_session_summary.txt")
