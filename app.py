@@ -104,6 +104,11 @@ def inject_styles():
             .mm-muted { color: rgba(255,255,255,0.68); }
             .mm-small { font-size: 0.9rem; }
             .mm-divider { height: 1px; background: rgba(255,255,255,0.08); margin: 10px 0; }
+            details[data-testid="stExpander"] { border-radius: 14px; border: 1px solid rgba(255,255,255,0.10); background: rgba(255,255,255,0.02); }
+            details[data-testid="stExpander"] summary { padding-left: 0.25rem; }
+            #MainMenu { visibility: hidden; }
+            header { visibility: hidden; }
+            footer { visibility: hidden; }
         </style>
         """,
         unsafe_allow_html=True,
@@ -348,6 +353,10 @@ if "last_kb_hits" not in st.session_state:
     st.session_state.last_kb_hits = []
 if "last_mem_hits" not in st.session_state:
     st.session_state.last_mem_hits = []
+if "pending_prompt" not in st.session_state:
+    st.session_state.pending_prompt = ""
+if "last_summary" not in st.session_state:
+    st.session_state.last_summary = ""
 
 def handle_user_prompt(user_text, mood_level, emotion):
     st.session_state.messages.append({"role": "user", "content": user_text})
@@ -364,6 +373,28 @@ def handle_user_prompt(user_text, mood_level, emotion):
             )
         )
     st.session_state.messages.append({"role": "assistant", "content": out})
+
+def reset_session_state():
+    st.session_state.messages = []
+    st.session_state.last_tool = "none"
+    st.session_state.last_tool_query = ""
+    st.session_state.last_kb_hits = []
+    st.session_state.last_mem_hits = []
+    st.session_state.pending_prompt = ""
+    st.session_state.last_summary = ""
+
+def save_session_state(mood_level, emotion):
+    if not st.session_state.messages:
+        return ""
+    summary = generate_session_summary(st.session_state.messages)
+    user_last = ""
+    for m in reversed(st.session_state.messages):
+        if m["role"] == "user":
+            user_last = m["content"]
+            break
+    save_log(mood_level, emotion, user_last, summary)
+    st.session_state.last_summary = summary
+    return summary
 
 with st.sidebar:
     st.markdown("<p class='mm-title'>MindMapper</p>", unsafe_allow_html=True)
@@ -414,6 +445,23 @@ with st.sidebar:
             st.caption("No saved sessions yet.")
     st.divider()
     st.session_state.show_sources = st.toggle("Show sources & tool trace", value=st.session_state.show_sources)
+    with st.expander("Session Controls", expanded=True):
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button("New Session"):
+                reset_session_state()
+                st.rerun()
+        with c2:
+            if st.button("End & Save"):
+                s = save_session_state(mood_level, emotion)
+                if s is not None:
+                    st.success("Session saved.")
+        if st.session_state.last_summary:
+            st.download_button(
+                "Download summary (.txt)",
+                data=st.session_state.last_summary,
+                file_name="mindmapper_session_summary.txt",
+            )
     with st.expander("Emergency Resources"):
         st.error("Crisis Lifeline: 988")
 
@@ -427,7 +475,7 @@ st.markdown(
       <div class='mm-hero-row'>
         <div>
           <p class='mm-title'>MindMapper AI</p>
-          <p class='mm-subtitle mm-small'>RAG for grounded answers • Agent tools for memory • Prompt defenses enabled</p>
+         
         </div>
         <div class='mm-hero-right'>
           <span class='mm-chip'>Mood: {emotion} • {mood_level}/10</span>
@@ -448,20 +496,29 @@ if not st.session_state.messages:
     q1, q2, q3, q4 = st.columns(4)
     with q1:
         if st.button("Reflect my mood"):
-            handle_user_prompt("I want to check in. Reflect what you notice from my mood and ask me one gentle question.", mood_level, emotion)
+            st.session_state.pending_prompt = "I want to check in. Reflect what you notice from my mood and ask me one gentle question."
+            st.rerun()
     with q2:
         if st.button("Help me reframe"):
-            handle_user_prompt("Help me reframe a stressful thought using a gentle CBT-style question.", mood_level, emotion)
+            st.session_state.pending_prompt = "Help me reframe a stressful thought using a gentle CBT-style question."
+            st.rerun()
     with q3:
         if st.button("Use my memory"):
-            handle_user_prompt("Based on my previous sessions, what patterns do you notice? Ask one question.", mood_level, emotion)
+            st.session_state.pending_prompt = "Based on my previous sessions, what patterns do you notice? Ask one question."
+            st.rerun()
     with q4:
         if st.button("Use my upload"):
-            handle_user_prompt("Based on the uploaded document, what are the key themes? Ask one question.", mood_level, emotion)
+            st.session_state.pending_prompt = "Based on the uploaded document, what are the key themes? Ask one question."
+            st.rerun()
 
 prompt = st.chat_input("Share what's on your mind…")
 if prompt:
     handle_user_prompt(prompt, mood_level, emotion)
+
+if st.session_state.pending_prompt:
+    pending = st.session_state.pending_prompt
+    st.session_state.pending_prompt = ""
+    handle_user_prompt(pending, mood_level, emotion)
 
 if st.session_state.show_sources:
     with st.expander("Sources & Tool Trace", expanded=False):
@@ -479,26 +536,3 @@ if st.session_state.show_sources:
                 st.markdown(f"<span class='mm-badge'>{ts} • {emo} • {ml}/10</span>", unsafe_allow_html=True)
                 if sm:
                     st.write(sm[:320])
-
-col_a, col_b = st.columns([1, 1])
-with col_a:
-    if st.button("New Session"):
-        st.session_state.messages = []
-        st.session_state.last_tool = "none"
-        st.session_state.last_tool_query = ""
-        st.session_state.last_kb_hits = []
-        st.session_state.last_mem_hits = []
-        st.rerun()
-with col_b:
-    if st.button("End & Save"):
-        if st.session_state.messages:
-            summary = generate_session_summary(st.session_state.messages)
-            user_last = ""
-            for m in reversed(st.session_state.messages):
-                if m["role"] == "user":
-                    user_last = m["content"]
-                    break
-            save_log(mood_level, emotion, user_last, summary)
-            st.success("Session saved.")
-            if summary:
-                st.download_button("Download summary (.txt)", data=summary, file_name="mindmapper_session_summary.txt")
